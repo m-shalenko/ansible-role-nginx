@@ -78,3 +78,5 @@ nginx_configs:
               root   /usr/share/nginx/html;
           }
       }
+
+nginx_stream_configs: []

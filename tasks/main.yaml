@@ -108,6 +108,42 @@
       loop: "{{ _nginx_old_config_files }}"
       when: item not in _nginx_new_config_files
 
+- name: Nginx | Manage stream configs
+  when: nginx_stream_configs
+  block:
+    - name: Nginx | Create stream configs
+      ansible.builtin.copy:
+        content: "{{ item.value }}"
+        dest: "{{ nginx_host_config_path }}/stream-conf.d/{{ item.name }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload nginx
+      loop: "{{ nginx_stream_configs }}"
+
+    - name: Nginx | Find old stream config files
+      ansible.builtin.find:
+        paths: "{{ nginx_host_config_path }}/stream-conf.d"
+      register: _nginx_old_stream_config
+
+    - name: Nginx | Get old stream config files
+      ansible.builtin.set_fact:
+        _nginx_old_stream_config_files: "{{ _nginx_old_stream_config_files | default([]) + [item.path | basename] }}"
+      loop: "{{ _nginx_old_stream_config.files }}"
+
+    - name: Nginx | Set new stream config files
+      ansible.builtin.set_fact:
+        _nginx_new_stream_config_files: "{{ _nginx_new_stream_config_files | default([]) + [item.name] }}"
+      loop: "{{ nginx_stream_configs }}"
+
+    - name: Nginx | Remove unnecessary stream config files
+      ansible.builtin.file:
+        state: absent
+        path: "{{ nginx_host_config_path }}/stream-conf.d/{{ item }}"
+      notify: Reload nginx
+      loop: "{{ _nginx_old_stream_config_files }}"
+      when: item not in _nginx_new_stream_config_files
+
 - name: Nginx | Create systemd service
   ansible.builtin.template:
     src: nginx.service.j2
