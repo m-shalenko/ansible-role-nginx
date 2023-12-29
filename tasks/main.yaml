@@ -1,0 +1,125 @@
+---
+- name: Nginx | Create nginx directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ nginx_host_config_path }}"
+    - "{{ nginx_host_config_path }}/conf.d"
+    - "{{ nginx_host_config_path }}/stream-conf.d"
+    - "{{ nginx_host_config_path }}/ssl"
+
+- name: Nginx | Create log directory
+  ansible.builtin.file:
+    path: /var/log/nginx
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Nginx | Create main config
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_host_config_path }}/nginx.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Nginx | Manage ssl
+  when: nginx_ssl
+  block:
+    - name: Nginx | Create ssl files
+      ansible.builtin.copy:
+        content: |
+          {{ item['tls.crt'] }}
+
+          {{ item['tls.key'] }}
+        dest: "{{ nginx_host_config_path }}/ssl/{{ item.name }}"
+        owner: root
+        group: root
+        mode: "0640"
+      loop: "{{ nginx_ssl }}"
+      when:
+        - item.name
+        - item['tls.crt']
+        - item['tls.key']
+      notify: Reload nginx
+
+    - name: Nginx | Find old ssl files
+      ansible.builtin.find:
+        paths: "{{ nginx_host_config_path }}/ssl"
+      register: _nginx_old_ssl
+
+    - name: Nginx | Get old ssl files
+      ansible.builtin.set_fact:
+        _nginx_old_ssl_files: "{{ _nginx_old_ssl_files | default([]) + [item.path | basename] }}"
+      loop: "{{ _nginx_old_ssl.files }}"
+
+    - name: Nginx | Set new ssl files
+      ansible.builtin.set_fact:
+        _nginx_new_ssl_files: "{{ _nginx_new_ssl_files | default([]) + [item.name] }}"
+      loop: "{{ nginx_ssl }}"
+
+    - name: Nginx | Remove unnecessary ssl files
+      ansible.builtin.file:
+        state: absent
+        path: "{{ nginx_host_config_path }}/ssl/{{ item }}"
+      notify: Reload nginx
+      loop: "{{ _nginx_old_ssl_files }}"
+      when: item not in _nginx_new_ssl_files
+
+- name: Nginx | Manage configs
+  when: nginx_configs
+  block:
+    - name: Nginx | Create configs
+      ansible.builtin.copy:
+        content: "{{ item.value }}"
+        dest: "{{ nginx_host_config_path }}/conf.d/{{ item.name }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload nginx
+      loop: "{{ nginx_configs }}"
+
+    - name: Nginx | Find old config files
+      ansible.builtin.find:
+        paths: "{{ nginx_host_config_path }}/conf.d"
+      register: _nginx_old_config
+
+    - name: Nginx | Get old config files
+      ansible.builtin.set_fact:
+        _nginx_old_config_files: "{{ _nginx_old_config_files | default([]) + [item.path | basename] }}"
+      loop: "{{ _nginx_old_config.files }}"
+
+    - name: Nginx | Set new config files
+      ansible.builtin.set_fact:
+        _nginx_new_config_files: "{{ _nginx_new_config_files | default([]) + [item.name] }}"
+      loop: "{{ nginx_configs }}"
+
+    - name: Nginx | Remove unnecessary config files
+      ansible.builtin.file:
+        state: absent
+        path: "{{ nginx_host_config_path }}/conf.d/{{ item }}"
+      notify: Reload nginx
+      loop: "{{ _nginx_old_config_files }}"
+      when: item not in _nginx_new_config_files
+
+- name: Nginx | Create systemd service
+  ansible.builtin.template:
+    src: nginx.service.j2
+    dest: /etc/systemd/system/nginx.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart nginx
+
+- name: Nginx | Start the systemd service
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    daemon_reload: true
+    enabled: true
