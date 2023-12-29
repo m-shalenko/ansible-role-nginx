@@ -1,0 +1,33 @@
+[Unit]
+Requires=docker.service
+After=docker.service
+
+[Service]
+ExecStartPre=-/usr/bin/docker rm --force %N
+ExecStart=/usr/bin/docker run \
+  --name=%N \
+  --rm=true \
+  --pid=host \
+  --network=host \
+  --stop-timeout={{ nginx_docker_stop_timeout }} \
+{% for key, value in nginx_docker_envs.items() %}
+  --env="{{ key }}={{ value }}" \
+{% endfor %}
+  --volume={{ nginx_host_config_path }}/ssl:{{ nginx_docker_config_path }}/ssl:ro \
+  --volume={{ nginx_host_config_path }}/conf.d:{{ nginx_docker_config_path }}/conf.d:ro \
+  --volume={{ nginx_host_config_path }}/stream-conf.d:{{ nginx_docker_config_path }}/stream-conf.d:ro \
+  --volume={{ nginx_host_config_path }}/nginx.conf:{{ nginx_docker_config_path }}/nginx.conf:ro \
+  --volume=/var/log/nginx:/var/log/nginx:rw \
+{% for volume in nginx_docker_volumes %}
+  --volume={{ volume.host_path }}:{{ volume.container_path }} \
+{% endfor %}
+  {{ nginx_docker_image }}:{{ nginx_docker_image_tag }}
+ExecStop=-/usr/bin/docker stop %N
+ExecReload={{ nginx_exec_reload }}
+Restart=always
+StartLimitInterval=0
+RestartSec=10
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

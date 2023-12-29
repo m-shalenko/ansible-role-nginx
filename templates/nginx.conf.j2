@@ -1,0 +1,13 @@
+{{ nginx_main_snippets }}
+
+http {
+    {{ nginx_http_snippets | indent(4) }}
+
+    include {{ nginx_docker_config_path }}/conf.d/*.conf;
+}
+
+stream {
+    {{ nginx_stream_snippets | indent(4) }}
+
+    include {{ nginx_docker_config_path }}/stream-conf.d/*.conf;
+}
