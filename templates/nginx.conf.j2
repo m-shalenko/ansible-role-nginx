@@ -1,9 +1,6 @@
 {{ nginx_main_snippets }}
 
 http {
-    include       {{ nginx_docker_config_path }}/mime.types;
-    default_type  application/octet-stream;
-
     {{ nginx_http_snippets | indent(4) }}
 
     include {{ nginx_docker_config_path }}/conf.d/*.conf;

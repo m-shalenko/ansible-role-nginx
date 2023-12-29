@@ -20,6 +20,9 @@ nginx_main_snippets: |
   }
 
 nginx_http_snippets: |
+  include       {{ nginx_docker_config_path }}/mime.types;
+  default_type  application/octet-stream;
+
   log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
                     '$status $body_bytes_sent "$http_referer" '
                     '"$http_user_agent" "$http_x_forwarded_for"';
@@ -28,7 +31,7 @@ nginx_http_snippets: |
 
   sendfile        on;
 
-  keepalive_timeout  65;
+  keepalive_timeout  65s;
 
 nginx_stream_snippets: |
   log_format  stream-main   '$remote_addr [$time_local] '
